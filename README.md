@@ -1,3 +1,1 @@
 <img width="664" height="564" alt="gymnasium_taxidriver" src="https://github.com/user-attachments/assets/6eec50e4-e0c7-4a26-a754-12d031e0142f" /> 
-
-Este projeto implementa agentes que aprendem a operar como motorista de táxi no ambiente Taxi-v4 da biblioteca Gymnasium, usando dois algoritmos de aprendizado por reforço tabular: Q-Learning e SARSA. Ambos são aplicados em duas versões do ambiente, uma determinística e outra estocástica, o que permite comparar o desempenho de cada algoritmo com e sem incerteza nas transições. Os agentes não recebem nenhuma regra prévia. Eles aprendem por tentativa e erro a buscar passageiros e entregá-los no destino correto pelo caminho mais eficiente.
