@@ -1,5 +1,10 @@
 <img width="664" height="564" alt="gymnasium_taxidriver" src="https://github.com/user-attachments/assets/6eec50e4-e0c7-4a26-a754-12d031e0142f" />
 
+## Team
+- Brenda Lima
+- Miqueias Ayron
+- Pedro Pereira
+  
 # Q-Learning x SARSA no Taxi-v4
 
 Projeto de introdução a Reinforcement Learning: agentes treinados com **Q-Learning** e **SARSA** no ambiente `Taxi-v4` do Gymnasium, nas versões determinística e não determinística (`is_rainy=True`, `rainy_probability=0.6`).
