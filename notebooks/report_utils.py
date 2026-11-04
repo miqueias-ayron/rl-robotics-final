@@ -1,4 +1,4 @@
-"""Helpers for RELATORIO.ipynb: load saved rewards, build the summary table and plot comparisons."""
+"""Helpers for RELATORIO.ipynb: load saved rewards, evaluate learned policies and plot learning curves."""
 
 from pathlib import Path
 
@@ -19,32 +19,59 @@ def moving_average(x, window=MA_WINDOW):
     return np.convolve(x, np.ones(window) / window, mode="valid")
 
 
-def first_episode_reaching(mean, threshold, window=MA_WINDOW):
-    """First episode (1-indexed) where the moving average of the mean curve reaches `threshold`, or None."""
-    ma = moving_average(mean, window)
-    hits = np.flatnonzero(ma >= threshold)
-    return int(hits[0] + window) if hits.size else None
+def evaluate_policy(q_table, env, n_episodes=100):
+    """Run the greedy policy of `q_table` for `n_episodes`; return per-episode timesteps and success flags."""
+    timesteps, successes = [], []
+    for seed in range(n_episodes):
+        state, _ = env.reset(seed=seed)
+        done = truncated = False
+        steps = 0
+        while not (done or truncated):
+            state, _, done, truncated, _ = env.step(int(np.argmax(q_table[state])))
+            steps += 1
+        timesteps.append(steps)
+        successes.append(done)
+    return np.array(timesteps), np.array(successes)
 
 
-def summary_table(rewards: dict, labels: dict, goal: float, last_n: int = 1000) -> pd.DataFrame:
-    """One row per experiment with learning-speed, final-performance and stability metrics."""
+def evaluation_summary(q_tables, env, n_episodes=100) -> dict:
+    """Evaluate the greedy policy of every run's Q-table; return timesteps (mean, std) and success rate (mean, std across runs)."""
+    timesteps, successes = zip(*(evaluate_policy(q, env, n_episodes) for q in q_tables))
+    timesteps, successes = np.array(timesteps), np.array(successes)
+    done_steps = timesteps[successes]
+    success_rates = 100 * successes.mean(axis=1)
+    return {
+        "Timesteps médios": done_steps.mean() if done_steps.size else np.nan,
+        "Desvio padrão dos timesteps": done_steps.std(ddof=1) if done_steps.size > 1 else np.nan,
+        "Taxa de sucesso (%)": success_rates.mean(),
+        "Desvio da taxa de sucesso entre runs": success_rates.std(ddof=1),
+    }
+
+
+def results_table(rewards: dict, q_tables: dict, envs: dict, labels: dict, last_n: int = 1000) -> pd.DataFrame:
+    """One row per experiment: final training reward plus the greedy evaluation of the Q-tables of all runs."""
     rows = []
     for name, r in rewards.items():
-        mean = r.mean(axis=0)
-        last = r[:, -last_n:]
         rows.append({
             "Configuração": labels[name],
-            "Média 1º–1000º ep.": mean[:1000].mean(),
-            f"Média últimos {last_n} ep.": last.mean(),
-            f"Desvio entre runs (últ. {last_n})": last.mean(axis=1).std(ddof=1),
-            f"Desvio da curva média (últ. {last_n})": mean[-last_n:].std(),
-            "Ep. até MM ≥ -50": first_episode_reaching(mean, -50),
-            "Ep. até MM ≥ 0": first_episode_reaching(mean, 0),
-            f"% ep. com recompensa > 0 (últ. {last_n})": 100 * (last > 0).mean(),
-            f"% ep. ≥ goal (últ. {last_n})": 100 * (last >= goal).mean(),
-            f"% ep. ≤ -200 (≈ truncados, últ. {last_n})": 100 * (last <= -200).mean(),
+            f"Recompensa média (últ. {last_n} ep. de treino)": r[:, -last_n:].mean(),
+            **evaluation_summary(q_tables[name], envs[name]),
         })
     return pd.DataFrame(rows).set_index("Configuração").round(2)
+
+
+def transfer_table(q_tables: dict, deterministic_env, stochastic_env) -> pd.DataFrame:
+    """Test the deterministic Q-tables in the rainy environment and compare with the other two scenarios."""
+    rows = []
+    for algorithm, label in [("qlearning", "Q-Learning"), ("sarsa", "SARSA")]:
+        scenarios = [
+            ("treino determinístico → teste determinístico", f"{algorithm}_deterministic", deterministic_env),
+            ("treino determinístico → teste com chuva", f"{algorithm}_deterministic", stochastic_env),
+            ("treino com chuva → teste com chuva", f"{algorithm}_stochastic", stochastic_env),
+        ]
+        for scenario, name, env in scenarios:
+            rows.append({"Algoritmo": label, "Cenário": scenario, **evaluation_summary(q_tables[name], env)})
+    return pd.DataFrame(rows).set_index(["Algoritmo", "Cenário"]).round(2)
 
 
 def plot_comparison(rewards: dict, labels: dict, names: list, title: str, goal: float, window: int = MA_WINDOW):
